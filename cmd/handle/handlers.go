@@ -2,6 +2,8 @@ package handle
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/mahjadan/login/pkg/repository"
 	"github.com/mahjadan/login/pkg/service"
 	"github.com/mahjadan/login/pkg/token"
 	"io/ioutil"
@@ -26,30 +28,37 @@ func (h Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var user UserRequest
 	all, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, NewBadRequestResponse(err.Error()))
 		return
 	}
 	err = json.Unmarshal(all, &user)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, NewBadRequestResponse(err.Error()))
 		return
 	}
 
 	err = h.srv.Login(r.Context(), user.Username, user.Password)
 	if err != nil {
-		writeErr(w, err)
+		if errors.Is(err, service.ErrInvalidUserOrPassword) {
+			writeErr(w, UnauthorizedLoginResponse)
+			return
+		}
+		log.Println("login, ", err)
+		writeErr(w, InternalServerErrorResponse)
 		return
 	}
 
 	t, err := h.token.Create(token.UserToken{Username: user.Username}, 10*time.Minute)
 	if err != nil {
-		writeErr(w, err)
+		log.Println("create token, ", err)
+		writeErr(w, InternalServerErrorResponse)
 		return
 	}
 	resp := UserResponse{Token: t}
 	bytes, err := json.Marshal(resp)
 	if err != nil {
-		writeErr(w, err)
+		log.Println("marshal token, ", err)
+		writeErr(w, InternalServerErrorResponse)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -62,30 +71,37 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var user UserRequest
 	all, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, NewBadRequestResponse(err.Error()))
 		return
 	}
 	err = json.Unmarshal(all, &user)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, NewBadRequestResponse(err.Error()))
 		return
 	}
 
 	err = h.srv.Register(r.Context(), user.Username, user.Password)
 	if err != nil {
-		writeErr(w, err)
+		if errors.Is(err, repository.ErrAlreadyExists) {
+			writeErr(w, ConflictRequestErrorResponse)
+			return
+		}
+		log.Println("register, ", err)
+		writeErr(w, InternalServerErrorResponse)
 		return
 	}
 	t, err := h.token.Create(token.UserToken{Username: user.Username}, 10*time.Minute)
 	if err != nil {
-		writeErr(w, err)
+		log.Println("create token, ", err)
+		writeErr(w, InternalServerErrorResponse)
 		return
 	}
 
 	resp := UserResponse{Token: t}
 	bytes, err := json.Marshal(resp)
 	if err != nil {
-		writeErr(w, err)
+		log.Println("marshal token, ", err)
+		writeErr(w, InternalServerErrorResponse)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -94,8 +110,9 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 	log.Println("successful registration, user: ", user.Username)
 }
 
-func writeErr(w http.ResponseWriter, err error) {
-	log.Println("error :", err)
-	w.WriteHeader(http.StatusBadRequest)
-	w.Write([]byte(err.Error()))
+func writeErr(w http.ResponseWriter, errorResponse HTTPErrorResponse) {
+	log.Println("error :", errorResponse)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(errorResponse.HTTPStatusCode)
+	w.Write(errorResponse.ToJSON())
 }

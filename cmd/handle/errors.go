@@ -1,6 +1,7 @@
 package handle
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -8,7 +9,7 @@ import (
 var (
 	BadRequestErrorResponse           = HTTPErrorResponse{HTTPStatusCode: 400, ErrorCode: "400", Message: "Requisição mal formatada"}
 	UnauthorizedErrorResponse         = HTTPErrorResponse{HTTPStatusCode: 401, ErrorCode: "401", Message: "Necessita autenticação"}
-	UnauthorizedLoginResponse         = HTTPErrorResponse{HTTPStatusCode: 401, ErrorCode: "401", Message: "Usuário ou senha inválidos"}
+	UnauthorizedLoginResponse         = HTTPErrorResponse{HTTPStatusCode: 401, ErrorCode: "401", Message: "invalid username or password"}
 	ExpiredTokenErrorResponse         = HTTPErrorResponse{HTTPStatusCode: 401, ErrorCode: "401", Message: "Token expirado"}
 	ForbiddenErrorResponse            = HTTPErrorResponse{HTTPStatusCode: 403, ErrorCode: "403", Message: "Usuário não autorizado"}
 	NotFoundErrorResponse             = HTTPErrorResponse{HTTPStatusCode: 404, ErrorCode: "404", Message: "Recurso não encontrado"}
@@ -73,8 +74,8 @@ func (resp *HTTPErrorResponse) String() string {
 	return s.String()
 }
 
-func NewBadRequestResponse(err string) HTTPErrorResponse {
-	return HTTPErrorResponse{HTTPStatusCode: 400, ErrorCode: "400", Message: err}
+func NewBadRequestResponse(errMsg string) HTTPErrorResponse {
+	return HTTPErrorResponse{HTTPStatusCode: 400, ErrorCode: "400", Message: errMsg}
 }
 
 func NewNotFoundResponse(err string) HTTPErrorResponse {
@@ -105,4 +106,12 @@ func (resp *HTTPErrorResponse) AddError(fieldName, message string, restrictionTy
 
 func (resp *HTTPErrorResponse) HasError() bool {
 	return len(resp.ValidationErrors) > 0
+}
+
+func (resp *HTTPErrorResponse) ToJSON() []byte {
+	if resp == nil {
+		return []byte{}
+	}
+	response, _ := json.Marshal(resp)
+	return response
 }
